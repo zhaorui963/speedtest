@@ -16,12 +16,12 @@ YELLOW='\033[0;33m'
 SKYBLUE='\033[0;36m'
 PLAIN='\033[0m'
 
-about () {
+about() {
 	echo ""
 	echo " ========================================================= "
 	echo " \                 Superbench.sh  Script                 / "
 	echo " \       Basic system info, I/O test and speedtest       / "
-	echo " \                   v1.0.4 (7 May 2018)                 / "
+	echo " \                  v1.1.3 (25 Oct 2018)                 / "
 	echo " \                   Created by Oldking                  / "
 	echo " ========================================================= "
 	echo ""
@@ -31,7 +31,7 @@ about () {
 	echo ""
 }
 
-cancel () {
+cancel() {
 	echo ""
 	next;
 	echo " Abort ..."
@@ -150,12 +150,13 @@ benchinit() {
 	fi
 	chmod a+rx speedtest.py
 
-	# install ip_info.py
-	if  [ ! -e 'ip_info.py' ]; then
-		echo " Installing IP_info.py ..."
-		wget --no-check-certificate https://raw.githubusercontent.com/oooldking/script/master/ip_info.py > /dev/null 2>&1
+
+	# install tools.py
+	if  [ ! -e 'tools.py' ]; then
+		echo " Installing tools.py ..."
+		wget --no-check-certificate https://raw.githubusercontent.com/oooldking/script/master/tools.py > /dev/null 2>&1
 	fi
-	chmod a+rx ip_info.py
+	chmod a+rx tools.py
 
 	# install fast.com-cli
 	if  [ ! -e 'fast_com.py' ]; then
@@ -185,11 +186,17 @@ next() {
 speed_test(){
 	if [[ $1 == '' ]]; then
 		temp=$(python speedtest.py --share 2>&1)
-		is_down=$(echo "$temp" | grep 'Download') 
+		is_down=$(echo "$temp" | grep 'Download')
+		result_speed=$(echo "$temp" | awk -F ' ' '/results/{print $3}')
 		if [[ ${is_down} ]]; then
 	        local REDownload=$(echo "$temp" | awk -F ':' '/Download/{print $2}')
 	        local reupload=$(echo "$temp" | awk -F ':' '/Upload/{print $2}')
 	        local relatency=$(echo "$temp" | awk -F ':' '/Hosted/{print $2}')
+
+	        temp=$(echo "$relatency" | awk -F '.' '{print $1}')
+        	if [[ ${temp} -gt 50 ]]; then
+            	relatency=" (*)"${relatency}
+        	fi
 	        local nodeName=$2
 
 	        temp=$(echo "${REDownload}" | awk -F ' ' '{print $1}')
@@ -207,10 +214,10 @@ speed_test(){
 	        local reupload=$(echo "$temp" | awk -F ':' '/Upload/{print $2}')
 	        local relatency=$(echo "$temp" | awk -F ':' '/Hosted/{print $2}')
 	        #local relatency=$(pingtest $3)
-	        temp=$(echo "$relatency" | awk -F '.' '{print $1}')
-        	if [[ ${temp} -gt 1000 ]]; then
-            	relatency=" 000.000 ms"
-        	fi
+	        #temp=$(echo "$relatency" | awk -F '.' '{print $1}')
+        	#if [[ ${temp} -gt 1000 ]]; then
+            	relatency=" - "
+        	#fi
 	        local nodeName=$2
 
 	        temp=$(echo "${REDownload}" | awk -F ' ' '{print $1}')
@@ -226,15 +233,18 @@ speed_test(){
 print_speedtest() {
 	printf "%-18s%-18s%-20s%-12s\n" " Node Name" "Upload Speed" "Download Speed" "Latency" | tee -a $log
     speed_test '' 'Speedtest.net'
-    speed_test '3633' 'Shanghai  CT'
-    speed_test '7509' 'Kunming   CT'
+    speed_fast_com
+    speed_test '5316' 'Nanjing   CT'
+    speed_test '4751' 'Beijing   CT'
+    speed_test '7509' 'Hangzhou  CT'
 	speed_test '4624' 'Chengdu   CT'
 	speed_test '5083' 'Shanghai  CU'
 	speed_test '4863' "Xi'an     CU"
 	speed_test '5726' 'Chongqing CU'
 	speed_test '4665' 'Shanghai  CM'
-	speed_test '5292' "Xi'an     CM"
 	speed_test '4575' 'Chengdu   CM'
+	speed_test '6168' 'Kunming   CM'
+	speed_test '6611' 'Guangzhou CM'
 	 
 	rm -rf speedtest.py
 }
@@ -243,7 +253,7 @@ print_speedtest_fast() {
 	printf "%-18s%-18s%-20s%-12s\n" " Node Name" "Upload Speed" "Download Speed" "Latency" | tee -a $log
     speed_test '' 'Speedtest.net'
     speed_fast_com
-    speed_test '7509' 'Kunming   CT'
+    speed_test '7509' 'Hangzhou  CT'
 	speed_test '5083' 'Shanghai  CU'
 	speed_test '4575' 'Chengdu   CM'
 	 
@@ -257,8 +267,8 @@ speed_fast_com() {
 	        temp1=$(echo "$temp" | awk -F ':' '/Result/{print $2}')
 	        temp2=$(echo "$temp1" | awk -F ' ' '/Mbps/{print $1}')
 	        local REDownload="$temp2 Mbit/s"
-	        local reupload="00.00 Mbit/s"
-	        local relatency="000.000 ms"
+	        local reupload="0.00 Mbit/s"
+	        local relatency="-"
 	        local nodeName="Fast.com"
 
 	        printf "${YELLOW}%-18s${GREEN}%-18s${RED}%-20s${SKYBLUE}%-12s${PLAIN}\n" " ${nodeName}" "${reupload}" "${REDownload}" "${relatency}" | tee -a $log
@@ -319,10 +329,13 @@ ip_info(){
 	org=$(echo $result | jq '.org' | sed 's/\"//g')
 	countryCode=$(echo $result | jq '.countryCode' | sed 's/\"//g')
 	region=$(echo $result | jq '.regionName' | sed 's/\"//g')
+	if [ -z "$city" ]; then
+		city=${region}
+	fi
 
 	echo -e " ASN & ISP            : ${SKYBLUE}$asn, $isp${PLAIN}" | tee -a $log
-	echo -e " Organization         : ${GREEN}$org${PLAIN}" | tee -a $log
-	echo -e " Location             : ${SKYBLUE}$city, ${GREEN}$country / $countryCode${PLAIN}" | tee -a $log
+	echo -e " Organization         : ${YELLOW}$org${PLAIN}" | tee -a $log
+	echo -e " Location             : ${SKYBLUE}$city, ${YELLOW}$country / $countryCode${PLAIN}" | tee -a $log
 	echo -e " Region               : ${SKYBLUE}$region${PLAIN}" | tee -a $log
 }
 
@@ -360,12 +373,46 @@ ip_info3(){
 	rm -rf ip_info.py
 }
 
+ip_info4(){
+	echo $(curl -4 -s http://api.ip.la/en?json) > ip_json.json
+	country=$(python tools.py ipip country_name)
+	city=$(python tools.py ipip city)
+	isp=$(python tools.py geoip isp)
+	as_tmp=$(python tools.py geoip as)
+	asn=$(echo $as_tmp | awk -F ' ' '{print $1}')
+	org=$(python tools.py geoip org)
+	countryCode=$(python tools.py ipip country_code)
+	region=$(python tools.py ipip province)
+	if [ !city ]; then
+		city=${region}
+	fi
+
+	echo -e " ASN & ISP            : ${SKYBLUE}$asn, $isp${PLAIN}" | tee -a $log
+	echo -e " Organization         : ${YELLOW}$org${PLAIN}" | tee -a $log
+	echo -e " Location             : ${SKYBLUE}$city, ${YELLOW}$country / $countryCode${PLAIN}" | tee -a $log
+	echo -e " Region               : ${SKYBLUE}$region${PLAIN}" | tee -a $log
+
+	rm -rf tools.py
+	rm -rf ip_json.json
+}
+
 virt_check(){
 	if hash ifconfig 2>/dev/null; then
 		eth=$(ifconfig)
 	fi
 
 	virtualx=$(dmesg) 2>/dev/null
+
+	# check dmidecode cmd
+	if  [ $(which dmidecode) ]; then
+		sys_manu=$(dmidecode -s system-manufacturer) 2>/dev/null
+		sys_product=$(dmidecode -s system-product-name) 2>/dev/null
+		sys_ver=$(dmidecode -s system-version) 2>/dev/null
+	else
+		sys_manu=""
+		sys_product=""
+		sys_ver=""
+	fi
 	
 	if grep docker /proc/1/cgroup -qa; then
 	    virtual="Docker"
@@ -377,6 +424,8 @@ virt_check(){
 		virtual="OpenVZ"
 	elif [[ "$virtualx" == *kvm-clock* ]]; then
 		virtual="KVM"
+	elif [[ "$cname" == *KVM* ]]; then
+		virtual="KVM"
 	elif [[ "$virtualx" == *"VMware Virtual Platform"* ]]; then
 		virtual="VMware"
 	elif [[ "$virtualx" == *"Parallels Software International"* ]]; then
@@ -385,6 +434,14 @@ virt_check(){
 		virtual="VirtualBox"
 	elif [[ -e /proc/xen ]]; then
 		virtual="Xen"
+	elif [[ "$sys_manu" == *"Microsoft Corporation"* ]]; then
+		if [[ "$sys_product" == *"Virtual Machine"* ]]; then
+			if [[ "$sys_ver" == *"7.0"* || "$sys_ver" == *"Hyper-V" ]]; then
+				virtual="Hyper-V"
+			else
+				virtual="Microsoft Virtual Machine"
+			fi
+		fi
 	else
 		virtual="Dedicated"
 	fi
@@ -399,7 +456,17 @@ power_time_check(){
 
 freedisk() {
 	# check free space
+	#spacename=$( df -m . | awk 'NR==2 {print $1}' )
+	#spacenamelength=$(echo ${spacename} | awk '{print length($0)}')
+	#if [[ $spacenamelength -gt 20 ]]; then
+   	#	freespace=$( df -m . | awk 'NR==3 {print $3}' )
+	#else
+	#	freespace=$( df -m . | awk 'NR==2 {print $4}' )
+	#fi
 	freespace=$( df -m . | awk 'NR==2 {print $4}' )
+	if [[ $freespace == "" ]]; then
+		$freespace=$( df -m . | awk 'NR==3 {print $3}' )
+	fi
 	if [[ $freespace -gt 1024 ]]; then
 		printf "%s" $((1024*2))
 	elif [[ $freespace -gt 512 ]]; then
@@ -409,7 +476,7 @@ freedisk() {
 	elif [[ $freespace -gt 128 ]]; then
 		printf "%s" $((128*2))
 	else
-		printf 1
+		printf "1"
 	fi
 }
 
@@ -451,15 +518,16 @@ print_io() {
 
 print_system_info() {
 	echo -e " CPU Model            : ${SKYBLUE}$cname${PLAIN}" | tee -a $log
-	echo -e " CPU Cores            : ${GREEN}$cores Cores ${SKYBLUE}@ $freq MHz $arch${PLAIN}" | tee -a $log
+	echo -e " CPU Cores            : ${YELLOW}$cores Cores ${SKYBLUE}@ $freq MHz $arch${PLAIN}" | tee -a $log
 	echo -e " CPU Cache            : ${SKYBLUE}$corescache ${PLAIN}" | tee -a $log
-	echo -e " OS                   : ${SKYBLUE}$opsy ($lbit Bit) ${GREEN}$virtual${PLAIN}" | tee -a $log
+	echo -e " OS                   : ${SKYBLUE}$opsy ($lbit Bit) ${YELLOW}$virtual${PLAIN}" | tee -a $log
 	echo -e " Kernel               : ${SKYBLUE}$kern${PLAIN}" | tee -a $log
-	echo -e " Total Space          : ${GREEN}$disk_total_size GB ${SKYBLUE}($disk_used_size GB Used)${PLAIN}" | tee -a $log
-	echo -e " Total RAM            : ${GREEN}$tram MB ${SKYBLUE}($uram MB Used $bram MB Buff)${PLAIN}" | tee -a $log
+	echo -e " Total Space          : ${YELLOW}$disk_total_size GB ${SKYBLUE}($disk_used_size GB Used)${PLAIN}" | tee -a $log
+	echo -e " Total RAM            : ${YELLOW}$tram MB ${SKYBLUE}($uram MB Used $bram MB Buff)${PLAIN}" | tee -a $log
 	echo -e " Total SWAP           : ${SKYBLUE}$swap MB ($uswap MB Used)${PLAIN}" | tee -a $log
 	echo -e " Uptime               : ${SKYBLUE}$up${PLAIN}" | tee -a $log
-	echo -e " Load average         : ${SKYBLUE}$load${PLAIN}" | tee -a $log
+	echo -e " Load Average         : ${SKYBLUE}$load${PLAIN}" | tee -a $log
+	echo -e " TCP CC               : ${YELLOW}$tcpctrl${PLAIN}" | tee -a $log
 }
 
 print_end_time() {
@@ -505,20 +573,30 @@ get_system_info() {
 	lbit=$( getconf LONG_BIT )
 	kern=$( uname -r )
 	#ipv6=$( wget -qO- -t1 -T2 ipv6.icanhazip.com )
-	disk_size1=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|devtmpfs|by-uuid|chroot|Filesystem' | awk '{print $2}' ))
-	disk_size2=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|devtmpfs|by-uuid|chroot|Filesystem' | awk '{print $3}' ))
+	disk_size1=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|overlay|shm|udev|devtmpfs|by-uuid|chroot|Filesystem' | awk '{print $2}' ))
+	disk_size2=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|overlay|shm|udev|devtmpfs|by-uuid|chroot|Filesystem' | awk '{print $3}' ))
 	disk_total_size=$( calc_disk ${disk_size1[@]} )
 	disk_used_size=$( calc_disk ${disk_size2[@]} )
+	#tcp congestion control
+	tcpctrl=$( sysctl net.ipv4.tcp_congestion_control | awk -F ' ' '{print $3}' )
+
+	#tmp=$(python tools.py disk 0)
+	#disk_total_size=$(echo $tmp | sed s/G//)
+	#tmp=$(python tools.py disk 1)
+	#disk_used_size=$(echo $tmp | sed s/G//)
+
 	virt_check
 }
 
 print_intro() {
 	printf ' Superbench.sh -- https://www.oldking.net/350.html\n' | tee -a $log
-	printf " Mode  : \e${GREEN}%s\e${PLAIN}    Version : \e${GREEN}%s${PLAIN}\n" $mode_name 1.0.4 | tee -a $log
+	printf " Mode  : \e${GREEN}%s\e${PLAIN}    Version : \e${GREEN}%s${PLAIN}\n" $mode_name 1.1.3 | tee -a $log
 	printf ' Usage : wget -qO- git.io/superbench.sh | bash\n' | tee -a $log
 }
 
 sharetest() {
+	echo " Share result:" | tee -a $log
+	echo " · $result_speed" | tee -a $log
 	log_preupload
 	case $1 in
 	'ubuntu')
@@ -533,8 +611,7 @@ sharetest() {
 	esac
 
 	# print result info
-	echo " Share result:" | tee -a $log
-	echo " $share_link" | tee -a $log
+	echo " · $share_link" | tee -a $log
 	next
 	echo ""
 	rm -f $log_up
@@ -570,7 +647,8 @@ cleanup() {
 	rm -f test_file_*;
 	rm -f speedtest.py;
 	rm -f fast_com*;
-	rm -f ip_info.py
+	rm -f tools.py;
+	rm -f ip_json.json
 }
 
 bench_all(){
@@ -583,7 +661,7 @@ bench_all(){
 	next;
 	get_system_info;
 	print_system_info;
-	ip_info3;
+	ip_info4;
 	next;
 	print_io;
 	next;
@@ -592,6 +670,7 @@ bench_all(){
 	print_end_time;
 	next;
 	cleanup;
+	sharetest ubuntu;
 }
 
 fast_bench(){
@@ -604,7 +683,7 @@ fast_bench(){
 	next;
 	get_system_info;
 	print_system_info;
-	ip_info3;
+	ip_info4;
 	next;
 	print_io fast;
 	next;
@@ -631,7 +710,7 @@ case $1 in
 	'speed'|'-speed'|'--speed'|'-speedtest'|'--speedtest'|'-speedcheck'|'--speedcheck' )
 		about;benchinit;next;print_speedtest;next;cleanup;;
 	'ip'|'-ip'|'--ip'|'geoip'|'-geoip'|'--geoip' )
-		about;benchinit;next;ip_info3;next;cleanup;;
+		about;benchinit;next;ip_info4;next;cleanup;;
 	'bench'|'-a'|'--a'|'-all'|'--all'|'-bench'|'--bench' )
 		bench_all;;
 	'about'|'-about'|'--about' )
